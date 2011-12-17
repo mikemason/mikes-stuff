@@ -10,6 +10,8 @@ public final class TweetEvent {
     private Date createdAt;
     private Point geo;
     private String text;
+    private boolean isHappy;
+    private boolean isSad;
 
     public TweetEvent() {
     }
@@ -51,6 +53,30 @@ public final class TweetEvent {
 
     public String getText() {
         return text;
+    }
+
+    public boolean isHappy() {
+        return isHappy;
+    }
+
+    public void setHappy() {
+        isHappy = true;
+    }
+
+    public boolean isSad() {
+        return isSad;
+    }
+
+    public void setSad() {
+        isSad = true;
+    }
+
+    public void clear() {
+        id = 0;
+        geo = null;
+        text = null;
+        isHappy = false;
+        isSad = false;
     }
 
     public final static EventFactory<TweetEvent> EVENT_FACTORY = new EventFactory<TweetEvent>()

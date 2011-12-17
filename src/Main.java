@@ -1,5 +1,6 @@
 import com.lmax.disruptor.*;
 import com.lmax.disruptor.dsl.Disruptor;
+import org.codehaus.jackson.JsonParseException;
 import org.codehaus.jackson.map.ObjectMapper;
 
 import java.io.BufferedReader;
@@ -9,31 +10,61 @@ import java.io.IOException;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 public class Main {
     private static final int RING_SIZE = 8192;
 
+    static long happyCount = 0;
+    static long sadCount = 0;
+
     public static void main(String[] args) throws InterruptedException, IOException {
 
-        final EventHandler<TweetEvent> moodTrackingHandler = new EventHandler<TweetEvent>() {
+        final Pattern happy = Pattern.compile(".*(happy|love|cheerful|glad|gleeful|jolly|joyous|merry|overjoyed|pleased|thrilled|upbeat).*");
+        final Pattern sad = Pattern.compile(".*(sad|cry|unhappy|depressed|dejected|despair|distressed|downcast|forlorn|gloomy|glum|heartbroken|melancholy|morbid|morose|pensive|somber|sorrowful|wistful).*");
+
+        final EventHandler<TweetEvent> moodComputingHandler = new EventHandler<TweetEvent>() {
+
             public void onEvent(final TweetEvent event, final long sequence, final boolean endOfBatch) throws Exception {
-                System.out.println("Processing Tweet ID " + event.getId());
+                String text = event.getText();
+                if(text == null) return;
+                text = text.toLowerCase();
+
+                if(happy.matcher(text).matches())
+                    event.setHappy();
+                if(sad.matcher(text).matches())
+                    event.setSad();
+            }
+        };
+
+        final EventHandler<TweetEvent> moodTrackingHandler = new EventHandler<TweetEvent>() {
+
+            public void onEvent(final TweetEvent event, final long sequence, final boolean endOfBatch) throws Exception {
+                if(event.isHappy())
+                    happyCount++;
+                if(event.isSad())
+                    sadCount++;
             }
         };
 
         final EventHandler<TweetEvent> outputDisplayHandler = new EventHandler<TweetEvent>() {
             public void onEvent(final TweetEvent event, final long sequence, final boolean endOfBatch) throws Exception {
-                System.out.println("Outputting Tweet ID " + event.getId());
+//                if(event.getId() % 100000000 == 0L) {
+//                    System.out.println("Happy: " + happyCount + "\tSad: " + sadCount);
+//                }
             }
         };
 
-        ThreadPoolExecutor executor = new ThreadPoolExecutor(2, 2, 5, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(8));
+        ThreadPoolExecutor executor = new ThreadPoolExecutor(4, 4, 5, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(8));
 
         Disruptor<TweetEvent> disruptor =
                 new Disruptor<TweetEvent>(TweetEvent.EVENT_FACTORY, executor,
                         new SingleThreadedClaimStrategy(RING_SIZE), new SleepingWaitStrategy());
 
-        disruptor.handleEventsWith(moodTrackingHandler).then(outputDisplayHandler);
+        //noinspection unchecked
+        disruptor.handleEventsWith(moodComputingHandler)
+                .then(moodTrackingHandler)
+                .then(outputDisplayHandler);
         final RingBuffer<TweetEvent> ringBuffer = disruptor.start();
 
         publishLotsOfEvents(ringBuffer);
@@ -43,6 +74,7 @@ public class Main {
         disruptor.halt();
         executor.shutdown();
         executor.awaitTermination(5, TimeUnit.SECONDS);
+        System.out.println("Happy: " + happyCount + "\tSad: " + sadCount);
     }
 
     private static void publishLotsOfEvents(RingBuffer<TweetEvent> ringBuffer) throws IOException {
@@ -52,15 +84,25 @@ public class Main {
         BufferedReader br = new BufferedReader(new FileReader(new File("/Users/mgm/work/hack_day/TwitterStreamAdapter/data/world/world-geo-1.json")));
         String line = br.readLine();
 
+        long start = System.currentTimeMillis();
+        long tweetsProcessed = 0;
         while(line != null) {
 
-            Tweet tweet = mapper.readValue(line, Tweet.class);
-            System.out.println("tweet = " + tweet);
+            Tweet tweet;
+            try {
+                tweet = mapper.readValue(line, Tweet.class);
+            } catch (JsonParseException e) {
+                System.out.println("Warning, bad line in JSON: " + line);
+                line = br.readLine();
+                continue;
+            }
+//            System.out.println("tweet = " + tweet);
 
             // Publishers claim events in sequence
             long sequence = ringBuffer.next();
             TweetEvent event = ringBuffer.get(sequence);
 
+            event.clear();
             event.setId(tweet.getId());
             if(tweet.getGeo() != null) {
                 final Tweet.Geo geo = tweet.getGeo();
@@ -70,10 +112,14 @@ public class Main {
 
             // make the event available to EventProcessors
             ringBuffer.publish(sequence);
+            tweetsProcessed++;
 
             line = br.readLine();
         }
 
+        double secondsTaken = (double)((System.currentTimeMillis() - start)) / 1000.0;
+        double tweetsPerSecond = (double) tweetsProcessed / secondsTaken;
+        System.out.println("tweetsPerSecond = " + (int) tweetsPerSecond);
     }
 }
 
