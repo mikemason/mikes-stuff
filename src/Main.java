@@ -15,8 +15,10 @@ import java.util.regex.Pattern;
 public class Main {
     private static final int RING_SIZE = 8192;
 
-    static long happyCount = 0;
-    static long sadCount = 0;
+    static long happyAmericaCount = 0;
+    static long sadAmericaCount = 0;
+    static long happyEuropeCount = 0;
+    static long sadEuropeCount = 0;
 
     public static void main(String[] args) throws InterruptedException, IOException {
 
@@ -37,20 +39,31 @@ public class Main {
             }
         };
 
+        final EventHandler<TweetEvent> geoLocationHandler = new EventHandler<TweetEvent>() {
+
+            public void onEvent(final TweetEvent event, final long sequence, final boolean endOfBatch) throws Exception {
+                event.computeGeography();
+            }
+        };
+
         final EventHandler<TweetEvent> moodTrackingHandler = new EventHandler<TweetEvent>() {
 
             public void onEvent(final TweetEvent event, final long sequence, final boolean endOfBatch) throws Exception {
-                if(event.isHappy())
-                    happyCount++;
-                if(event.isSad())
-                    sadCount++;
+                if(event.isHappy() && event.isNorthAmerica())
+                    happyAmericaCount++;
+                else if(event.isHappy() && event.isEurope())
+                    happyEuropeCount++;
+                if(event.isSad() && event.isNorthAmerica())
+                    sadAmericaCount++;
+                else if(event.isSad() && event.isEurope())
+                    sadEuropeCount++;
             }
         };
 
         final EventHandler<TweetEvent> outputDisplayHandler = new EventHandler<TweetEvent>() {
             public void onEvent(final TweetEvent event, final long sequence, final boolean endOfBatch) throws Exception {
-//                if(event.getId() % 100000000 == 0L) {
-//                    System.out.println("Happy: " + happyCount + "\tSad: " + sadCount);
+//                if(event.getId() % 100000 == 0L) {
+//                    displayCounts();
 //                }
             }
         };
@@ -62,7 +75,7 @@ public class Main {
                         new SingleThreadedClaimStrategy(RING_SIZE), new SleepingWaitStrategy());
 
         //noinspection unchecked
-        disruptor.handleEventsWith(moodComputingHandler)
+        disruptor.handleEventsWith(moodComputingHandler, geoLocationHandler)
                 .then(moodTrackingHandler)
                 .then(outputDisplayHandler);
         final RingBuffer<TweetEvent> ringBuffer = disruptor.start();
@@ -74,7 +87,14 @@ public class Main {
         disruptor.halt();
         executor.shutdown();
         executor.awaitTermination(5, TimeUnit.SECONDS);
-        System.out.println("Happy: " + happyCount + "\tSad: " + sadCount);
+        displayCounts();
+    }
+
+    private static void displayCounts() {
+        System.out.println("Happy America: " + happyAmericaCount + "\tSad America: " + sadAmericaCount);
+        System.out.println("Happy Europe:  " + happyEuropeCount +  "\tSad Europe:  " + sadEuropeCount);
+        System.out.println("America is " + (100 * happyAmericaCount) / (happyAmericaCount + sadAmericaCount) + "% happy.");
+        System.out.println("Europe is  " + (100 * happyEuropeCount) / (happyEuropeCount + sadEuropeCount) + "% happy.");
     }
 
     private static void publishLotsOfEvents(RingBuffer<TweetEvent> ringBuffer) throws IOException {

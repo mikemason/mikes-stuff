@@ -12,6 +12,8 @@ public final class TweetEvent {
     private String text;
     private boolean isHappy;
     private boolean isSad;
+    private boolean isNorthAmerica;
+    private boolean isEurope;
 
     public TweetEvent() {
     }
@@ -77,6 +79,16 @@ public final class TweetEvent {
         text = null;
         isHappy = false;
         isSad = false;
+        isNorthAmerica = false;
+        isEurope = false;
+    }
+
+    public boolean isNorthAmerica() {
+        return isNorthAmerica;
+    }
+
+    public boolean isEurope() {
+        return isEurope;
     }
 
     public final static EventFactory<TweetEvent> EVENT_FACTORY = new EventFactory<TweetEvent>()
@@ -85,5 +97,10 @@ public final class TweetEvent {
             return new TweetEvent();
         }
     };
+
+    public void computeGeography() {
+        isNorthAmerica = geo != null && geo.isNorthAmerica();
+        isEurope = geo != null && geo.isEurope();
+    }
 }
 

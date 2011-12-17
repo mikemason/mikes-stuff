@@ -14,4 +14,12 @@ public class Point {
     public double getLongitude() {
         return longitude;
     }
+
+    public boolean isNorthAmerica() {
+        return latitude > 21 && latitude < 66 && longitude > -158 && longitude < -58;
+    }
+
+    public boolean isEurope() {
+        return latitude > 37 && latitude < 58 && longitude > -8 && longitude < 28;
+    }
 }
