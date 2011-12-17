@@ -10,7 +10,7 @@ public class TwitterWebReader extends TwitterReader {
 
         Authenticator.setDefault(new Authenticator() {
             protected PasswordAuthentication getPasswordAuthentication() {
-                return new PasswordAuthentication("mikemasonca", "k5bt72h3gpng".toCharArray());
+                return new PasswordAuthentication("mikemasonca", "***".toCharArray());
             }
         });
         URL url = new URL("https://stream.twitter.com/1/statuses/filter.json?locations=-179,-89,178,89");

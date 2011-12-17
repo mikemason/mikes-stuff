@@ -1,6 +1,12 @@
 import com.lmax.disruptor.*;
 import com.lmax.disruptor.dsl.Disruptor;
+import org.jfree.chart.ChartFactory;
+import org.jfree.chart.ChartFrame;
+import org.jfree.chart.JFreeChart;
+import org.jfree.data.general.DefaultPieDataset;
+
 import java.io.IOException;
+import java.util.Locale;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -15,6 +21,7 @@ public class Main {
     static long sadAmericaCount = 0;
     static long happyEuropeCount = 0;
     static long sadEuropeCount = 0;
+    private static ChartFrame chartFrame;
 
     public static void main(String[] args) throws InterruptedException, IOException {
 
@@ -39,13 +46,13 @@ public class Main {
             }
         };
 
-        final long[] nextTimeToPrintOutput = {System.currentTimeMillis() + 1000};
+        final long[] nextTimeToPrintOutput = {0};
         final EventHandler<TweetEvent> outputDisplayHandler = new EventHandler<TweetEvent>() {
             public void onEvent(final TweetEvent event, final long sequence, final boolean endOfBatch) throws Exception {
                 if(System.currentTimeMillis() > nextTimeToPrintOutput[0])
                 {
                     displayCounts();
-                    nextTimeToPrintOutput[0] = System.currentTimeMillis() + 1000;
+                    nextTimeToPrintOutput[0] = System.currentTimeMillis() + 5000;
                 }
             }
         };
@@ -65,8 +72,8 @@ public class Main {
                 .then(outputDisplayHandler);
         final RingBuffer<TweetEvent> ringBuffer = disruptor.start();
 
-//        new TwitterFileReader().publishLotsOfEvents(ringBuffer, 200000);
-        new TwitterWebReader().publishLotsOfEvents(ringBuffer, 100000);
+        new TwitterFileReader().publishLotsOfEvents(ringBuffer, 200000);
+//        new TwitterWebReader().publishLotsOfEvents(ringBuffer, 10000000);
 
         Thread.sleep(500);
         System.out.println("Shutting down...");
@@ -79,10 +86,28 @@ public class Main {
     private static void displayCounts() {
         System.out.println("Happy America: " + happyAmericaCount + "\tSad America: " + sadAmericaCount);
         System.out.println("Happy Europe:  " + happyEuropeCount +  "\tSad Europe:  " + sadEuropeCount);
-        if(happyAmericaCount + sadAmericaCount > 0)
-            System.out.println("America is " + (100 * happyAmericaCount) / (happyAmericaCount + sadAmericaCount) + "% happy.");
-        if(happyEuropeCount + sadEuropeCount > 0)
-            System.out.println("Europe is  " + (100 * happyEuropeCount) / (happyEuropeCount + sadEuropeCount) + "% happy.");
+        long americaPercentage = happyAmericaCount + sadAmericaCount > 0 ?
+                (100 * happyAmericaCount) / (happyAmericaCount + sadAmericaCount) : 100;
+        long europePercentage = happyEuropeCount + sadEuropeCount > 0 ?
+                (100 * happyEuropeCount) / (happyEuropeCount + sadEuropeCount) : 0;
+
+        System.out.println("America is " + americaPercentage + "% happy.");
+        System.out.println("Europe is  " + europePercentage + "% happy.");
+
+        DefaultPieDataset data = new DefaultPieDataset();
+        data.setValue("Happy American", happyAmericaCount);
+        data.setValue("Sad American", sadAmericaCount);
+        data.setValue("Happy European", happyEuropeCount);
+        data.setValue("Sad European", sadEuropeCount);
+
+        JFreeChart chart = ChartFactory.createPieChart("Happy People", data, true, false, Locale.getDefault());
+
+        if(chartFrame != null)
+            chartFrame.setVisible(false);
+
+        chartFrame = new ChartFrame("Happiness", chart);
+        chartFrame.pack();
+        chartFrame.setVisible(true);
     }
 }
 
