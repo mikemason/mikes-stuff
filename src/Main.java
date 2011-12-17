@@ -7,8 +7,8 @@ import java.util.concurrent.TimeUnit;
 
 public class Main {
     private static final int RING_SIZE = 8192;
-    private static final int THREAD_POOL_INITIAL_SIZE = 4;
-    private static final int THREAD_POOL_MAX_SIZE = 4;
+    private static final int THREAD_POOL_INITIAL_SIZE = 8;
+    private static final int THREAD_POOL_MAX_SIZE = 8;
     private static final int ARRAY_BLOCKING_QUEUE_SIZE = 8;
 
     static long happyAmericaCount = 0;
@@ -39,11 +39,14 @@ public class Main {
             }
         };
 
+        final long[] nextTimeToPrintOutput = {System.currentTimeMillis() + 1000};
         final EventHandler<TweetEvent> outputDisplayHandler = new EventHandler<TweetEvent>() {
             public void onEvent(final TweetEvent event, final long sequence, final boolean endOfBatch) throws Exception {
-//                if(event.getId() % 100000 == 0L) {
-//                    displayCounts();
-//                }
+                if(System.currentTimeMillis() > nextTimeToPrintOutput[0])
+                {
+                    displayCounts();
+                    nextTimeToPrintOutput[0] = System.currentTimeMillis() + 1000;
+                }
             }
         };
 
@@ -54,7 +57,7 @@ public class Main {
 
         Disruptor<TweetEvent> disruptor =
                 new Disruptor<TweetEvent>(TweetEvent.EVENT_FACTORY, executor,
-                        new SingleThreadedClaimStrategy(RING_SIZE), new SleepingWaitStrategy());
+                        new MultiThreadedClaimStrategy(RING_SIZE), new SleepingWaitStrategy());
 
         //noinspection unchecked
         disruptor.handleEventsWith(HappinessDetector.moodComputingHandler, geoLocationHandler)
@@ -62,7 +65,8 @@ public class Main {
                 .then(outputDisplayHandler);
         final RingBuffer<TweetEvent> ringBuffer = disruptor.start();
 
-        TwitterFileReader.publishLotsOfEvents(ringBuffer);
+//        new TwitterFileReader().publishLotsOfEvents(ringBuffer, 200000);
+        new TwitterWebReader().publishLotsOfEvents(ringBuffer, 100000);
 
         Thread.sleep(500);
         System.out.println("Shutting down...");
@@ -75,8 +79,10 @@ public class Main {
     private static void displayCounts() {
         System.out.println("Happy America: " + happyAmericaCount + "\tSad America: " + sadAmericaCount);
         System.out.println("Happy Europe:  " + happyEuropeCount +  "\tSad Europe:  " + sadEuropeCount);
-        System.out.println("America is " + (100 * happyAmericaCount) / (happyAmericaCount + sadAmericaCount) + "% happy.");
-        System.out.println("Europe is  " + (100 * happyEuropeCount) / (happyEuropeCount + sadEuropeCount) + "% happy.");
+        if(happyAmericaCount + sadAmericaCount > 0)
+            System.out.println("America is " + (100 * happyAmericaCount) / (happyAmericaCount + sadAmericaCount) + "% happy.");
+        if(happyEuropeCount + sadEuropeCount > 0)
+            System.out.println("Europe is  " + (100 * happyEuropeCount) / (happyEuropeCount + sadEuropeCount) + "% happy.");
     }
 }
 
